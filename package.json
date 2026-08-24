@@ -37,6 +37,29 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.yml"
+    },
+    "compatibility": {
+      "node": ">=23.6.0",
+      "dsh": ">=0.1.0"
+    },
+    "permissions": {
+      "summary": "订阅 session/event 的 tool/result 输出录制为 asciinema v2 (.cast)；离线内嵌播放器回放 + HTML 导出。本地仅内存/会话数据，无网络无外部服务。",
+      "commands": [
+        "node <pkg>/lib/*.js (recorder/tools, in-process)"
+      ],
+      "writePaths": [
+        "<castsDir>/*.cast（默认工作区 .casts/）",
+        "导出 HTML 路径"
+      ],
+      "externalServices": [],
+      "failureBoundaries": [
+        "maxEvents/maxBytes 上限",
+        "回放离线无外部请求"
+      ],
+      "lifecycleEvidence": [
+        "16/16 smoke",
+        "player.html 内嵌离线渲染"
+      ]
     }
   },
   "keywords": [
@@ -77,5 +100,9 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/988hj7tczd-oss/dsh-asciinema.git"
   }
 }
