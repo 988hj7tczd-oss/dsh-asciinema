@@ -1,0 +1,16 @@
+{
+  // 构建配置:把 src/ 编译到 lib/(ESM + 类型声明)。
+  // 依赖 tsconfig.json 的路径映射与严格模式;仅覆盖编译器选项与输入范围。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "lib",
+    "rootDir": "src",
+    "declaration": true,
+    "sourceMap": false,
+    // .ts 后缀的相对导入在产物中改写为 .js(Node ESM 可加载)。
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/**/*.ts"]
+}

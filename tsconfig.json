@@ -1,0 +1,36 @@
+{
+  // dsh-asciinema 的静态检查配置（noEmit）。
+// 插件为源码形态交付：开发时由 DSH 直接加载 .ts（Node ≥23.6 内置 type 擦除，
+// 22.x 需 --experimental-strip-types）；正式挂载前用 `pnpm build`
+// （tsconfig.build.json）编译到 lib/ 并切换 package.json 入口。
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": [],
+    "paths": {
+      // 仅映射本插件直接 import 的 DSH 包；依赖 dsh-src 的已编译声明，
+      // 用相对路径指向旁边的 dsh-src 检出（skipLibCheck 跳过包内部声明）。
+      // 前提：仓库与 dsh-src 同级（../../../dsh-src），换布局需同步调整。
+      "@deepseek-ai/cordis": ["../../../dsh-src/vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/schemastery": ["../../../dsh-src/vendor/schemastery/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-tools": ["../../../dsh-src/packages/core/tools/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-agent": ["../../../dsh-src/packages/core/agent/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session": ["../../../dsh-src/packages/core/session/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session/types": ["../../../dsh-src/packages/core/session/lib/types/types.d.ts"],
+      "@deepseek-ai/dsh-llm/types": ["../../../dsh-src/packages/llm/llm/lib/types/types.d.ts"],
+      "@deepseek-ai/dsh-llm/message": ["../../../dsh-src/packages/llm/llm/lib/types/message.d.ts"],
+      "@deepseek-ai/dsh-fs": ["../../../dsh-src/packages/fs/fs/lib/types/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ — asciinema 回放 (dsh-asciinema)</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    background: #0d1117; color: #e6edf3; margin: 0; padding: 2rem 1.5rem;
+  }
+  header { max-width: 92ch; margin: 0 auto 1rem; }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; color: #f0f6fc; }
+  .meta { font-size: .8rem; color: #8b949e; }
+  .player {
+    max-width: 92ch; margin: 0 auto; background: #010409; border: 1px solid #30363d;
+    border-radius: 8px; overflow: hidden;
+  }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center;
+    padding: .55rem .9rem; background: #161b22; border-bottom: 1px solid #30363d;
+    font-size: .82rem;
+  }
+  button {
+    background: #21262d; color: #e6edf3; border: 1px solid #30363d;
+    border-radius: 6px; padding: .3rem .8rem; cursor: pointer; font: inherit;
+  }
+  button:hover { background: #30363d; }
+  select { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; font: inherit; }
+  input[type=range] { flex: 1 1 8rem; min-width: 8rem; accent-color: #2f81f7; }
+  .time { color: #8b949e; white-space: nowrap; }
+  .status { color: #7ee787; }
+  .markers { display: flex; flex-wrap: wrap; gap: .4rem; padding: .4rem .9rem; background: #161b22; border-bottom: 1px solid #30363d; }
+  .marker { font-size: .75rem; color: #f0b429; background: #271d04; border: 1px solid #8a6702; border-radius: 999px; padding: .1rem .5rem; }
+  #stage-wrap { padding: .9rem; overflow: auto; }
+  #stage {
+    white-space: pre-wrap; word-break: break-all; line-height: 1.25;
+    min-height: 1.6em; margin: 0; font-family: inherit; letter-spacing: 0;
+  }
+  .idle-note { color: #8b949e; font-style: italic; }
+  footer { max-width: 92ch; margin: .8rem auto 0; font-size: .72rem; color: #6e7681; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__TITLE__</h1>
+  <div class="meta" id="meta">…</div>
+</header>
+<div class="player">
+  <div class="bar">
+    <button id="btn-play" title="空格切换">▶ 播放</button>
+    <button id="btn-reset">⟲ 复位</button>
+    <label>速度
+      <select id="speed">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
+    </label>
+    <span class="time" id="time">0.000s / 0.0s</span>
+    <span class="status" id="status"></span>
+    <input type="range" id="seek" min="0" max="1000" value="0" title="拖动定位">
+  </div>
+  <div class="markers" id="markers"></div>
+  <div id="stage-wrap">
+    <pre id="stage"></pre>
+  </div>
+</div>
+<footer>
+  dsh-asciinema 离线播放器 — 数据已内嵌(<span id="mode-label">inline</span>);
+  也可用 ?url=xxx.cast 直接加载外部 .cast 文件。
+</footer>
+
+<script type="application/json" id="cast-data">__CAST_JSON__</script>
+<script>
+(function () {
+  'use strict'
+  // ---------- ANSI 控制序列剥离(CSI / OSC / 单字符转义) ----------
+  var ANSI = /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
+  function stripAnsi(text) { return text.replace(ANSI, '') }
+
+  var stage = document.getElementById('stage')
+  var timeEl = document.getElementById('time')
+  var statusEl = document.getElementById('status')
+  var seekEl = document.getElementById('seek')
+  var markersEl = document.getElementById('markers')
+  var btnPlay = document.getElementById('btn-play')
+  var btnReset = document.getElementById('btn-reset')
+  var speedEl = document.getElementById('speed')
+
+  var cast = null
+  var lines = []
+  var width = 100
+  var height = 40
+  var markers = []
+  var idx = 0
+  var timer = null
+  var playing = false
+
+  function loadCast() {
+    var raw = document.getElementById('cast-data').textContent.trim()
+    if (raw && raw !== '__CAST_JSON__' && raw !== 'null') {
+      try { cast = JSON.parse(raw) } catch (e) { cast = null }
+      document.getElementById('mode-label').textContent = 'inline'
+    }
+    if (!cast) {
+      var url = new URLSearchParams(location.search).get('url') || '__CAST_URL__'
+      if (url && url !== '') {
+        return fetch(url).then(function (r) { return r.json() }).then(function (data) {
+          cast = data
+          document.getElementById('mode-label').textContent = 'url'
+          return true
+        }).catch(function () { return false })
+      }
+    }
+    return Promise.resolve(cast !== null)
+  }
+
+  function parseCast(c) {
+    width = (c.width >= 1 && c.width <= 1000) ? Math.floor(c.width) : 100
+    height = (c.height >= 1 && c.height <= 1000) ? Math.floor(c.height) : 40
+    var list = Array.isArray(c.events) ? c.events : []
+    markers = []
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i]
+      if (e && e[1] === 'm' && typeof e[2] === 'string' && e[2]) markers.push(e[2])
+    }
+    return { idle: (typeof c.idle_time_limit === 'number') ? c.idle_time_limit : null }
+  }
+
+  function clearStage() { lines = []; stage.textContent = ''; }
+
+  function appendOutput(chunk) {
+    var text = stripAnsi(String(chunk))
+    var parts = text.split('\n')
+    for (var i = 0; i < parts.length; i++) {
+      if (i > 0) lines.push('')
+      lines[lines.length - 1] = (lines[lines.length - 1] !== undefined ? lines[lines.length - 1] : '') + parts[i].replace(/\r/g, '')
+    }
+    if (lines.length > height * 4) lines = lines.slice(-height * 4)
+    stage.textContent = lines.slice(-height).join('\n')
+  }
+
+  function renderMeta(c) {
+    var parts = [
+      'version ' + (c.version !== undefined ? c.version : 2),
+      width + '×' + height,
+      cast ? cast.events.length + ' 事件' : '0 事件',
+      '约 ' + totalTime(cast).toFixed(1) + 's'
+    ]
+    if (c.timestamp) parts.push(new Date(c.timestamp * 1000).toISOString())
+    document.getElementById('meta').textContent = parts.join(' · ')
+  }
+
+  function totalTime(c) {
+    if (!c || !Array.isArray(c.events)) return 0
+    var t = 0
+    for (var i = 0; i < c.events.length; i++) t += (typeof c.events[i][0] === 'number' ? c.events[i][0] : 0)
+    return t
+  }
+
+  function elapsedAt(frameIdx) {
+    var t = 0
+    for (var i = 0; i < frameIdx && i < cast.events.length; i++) t += (typeof cast.events[i][0] === 'number' ? cast.events[i][0] : 0)
+    return t
+  }
+
+  function renderMarkers() {
+    markersEl.textContent = ''
+    if (markers.length === 0) { markersEl.style.display = 'none'; return }
+    markersEl.style.display = 'flex'
+    for (var i = 0; i < markers.length; i++) {
+      var chip = document.createElement('span')
+      chip.className = 'marker'
+      chip.textContent = '📍 ' + markers[i]
+      markersEl.appendChild(chip)
+    }
+  }
+
+  function updateTime() {
+    timeEl.textContent = elapsedAt(idx).toFixed(3) + 's / ' + totalTime(cast).toFixed(1) + 's'
+    var max = 1000
+    seekEl.value = String(Math.round((elapsedAt(idx) / Math.max(totalTime(cast), 0.001)) * max))
+  }
+
+  function stop() {
+    if (timer) clearTimeout(timer)
+    timer = null
+    playing = false
+    btnPlay.textContent = '▶ 播放'
+    statusEl.textContent = ''
+  }
+
+  function step() {
+    if (!cast) return
+    if (idx >= cast.events.length) {
+      stop()
+      return
+    }
+    var e = cast.events[idx]
+    var delay = typeof e[0] === 'number' && e[0] >= 0 ? e[0] : 0
+    idx += 1
+    if (e[1] === 'o') appendOutput(e[2])
+    updateTime()
+    var waitMs = delay * 1000 / Number(speedEl.value)
+    if (idleLimit !== null && delay > idleLimit) {
+      // 空闲超过 idle_time_limit:快进到下一帧前暂停提示
+      statusEl.textContent = '⏳ 空闲 ' + delay.toFixed(1) + 's(快进)'
+      waitMs = idleLimit * 1000 / Number(speedEl.value)
+    } else {
+      statusEl.textContent = ''
+    }
+    timer = setTimeout(step, waitMs)
+  }
+
+  var idleLimit = null
+
+  function resetTo(frameIdx, autoplay) {
+    stop()
+    clearStage()
+    idx = 0
+    for (var i = 0; i < frameIdx && i < cast.events.length; i++) {
+      var e = cast.events[i]
+      if (e[1] === 'o') appendOutput(e[2])
+    }
+    updateTime()
+    if (autoplay) { playing = true; btnPlay.textContent = '⏸ 暂停'; step() }
+  }
+
+  function togglePlay() {
+    if (!cast) return
+    if (playing) { stop(); return }
+    if (idx >= cast.events.length) resetTo(0, false)
+    playing = true
+    btnPlay.textContent = '⏸ 暂停'
+    step()
+  }
+
+  btnPlay.addEventListener('click', togglePlay)
+  btnReset.addEventListener('click', function () { resetTo(0, false) })
+  speedEl.addEventListener('change', function () {
+    if (playing) { stop(); togglePlay() }
+  })
+  seekEl.addEventListener('input', function () {
+    if (!cast) return
+    var target = (Number(seekEl.value) / 1000) * totalTime(cast)
+    var frame = 0
+    var acc = 0
+    for (var i = 0; i < cast.events.length; i++) {
+      if (acc >= target) break
+      acc += (typeof cast.events[i][0] === 'number' ? cast.events[i][0] : 0)
+      frame = i
+    }
+    resetTo(frame, false)
+  })
+  document.addEventListener('keydown', function (ev) {
+    if (ev.code === 'Space') { ev.preventDefault(); togglePlay() }
+  })
+
+  loadCast().then(function (ok) {
+    if (!ok) {
+      stage.textContent = '无法加载录制数据:缺少内嵌 cast 且 url 为空/不可达。'
+      statusEl.textContent = '加载失败'
+      return
+    }
+    idleLimit = parseCast(cast).idle
+    renderMeta(cast)
+    renderMarkers()
+    updateTime()
+  })
+})()
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+NOTICE
+======
+
+dsh-asciinema
+-------------
+Copyright (c) 2026 dsh-asciinema contributors
+License: MIT (see LICENSE)
+
+Third-party notices
+-------------------
+
+1. asciinema / asciinema-file (optional vendor assets)
+   The `.cast` (asciicast v2) format this plugin reads and writes is defined
+   by the asciinema project: https://github.com/asciinema/asciinema
+   and documented at https://docs.asciinema.org/manual/asciicast/v2/
+   The format/specification is used for interoperability only; this project
+   implements its own cast-core from scratch and does not depend on the
+   asciinema CLI.
+
+2. asciinema-player (optional vendor assets)
+   `assets/player.html` plays recordings with its own built-in, offline
+   renderer. If you vendor the official asciinema-player files
+   (https://github.com/asciinema/asciinema-player) into this project or into
+   your deployment, those files are licensed under the Mozilla Public License
+   Version 2.0 (MPL-2.0), https://www.mozilla.org/MPL/2.0/. When distributing
+   those files you MUST keep this NOTICE and the MPL-2.0 license text next to
+   them, and disclose that the player is distributed under MPL-2.0 with
+   source available at https://github.com/asciinema/asciinema-player.
+
+3. ansi-regex (pattern reference)
+   The terminal escape-sequence stripping regex used in cast-core follows the
+   well-known ansi-regex construction (MIT License, https://github.com/chalk/ansi-regex).
+   This project embeds an equivalent expression rather than vendoring the package.

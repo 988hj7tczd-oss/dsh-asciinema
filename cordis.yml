@@ -1,0 +1,15 @@
+# dsh-asciinema 配置层（bundle patch）
+# 作为 dsh.bundle 的 patch 加载:在 profile 组合中插入一行插件,注册
+# term_rec / term_play / term_cat 三个工具与会话录制器。
+# 本地开发也可用 `dsh --patch ./cordis.yml` 直接叠加。
+# 注意:本 bundle 以源码形态发布,正式挂载前需先 `pnpm build`(见 README)。
+- insert:
+    - id: asciinema
+      name: dsh-asciinema
+      config:
+        width: 100
+        height: 40
+        maxEvents: 5000
+        maxBytes: 1048576
+        recordInput: false
+        castsDir: '.casts'
