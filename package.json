@@ -31,7 +31,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --no-warnings tests/smoke.e2e.ts",
-    "test:debug": "node --trace-warnings tests/smoke.e2e.ts"
+    "test:debug": "node --trace-warnings tests/smoke.e2e.ts",
+    "prepublishOnly": "npm run build"
   },
   "dsh": {
     "bundle": {
