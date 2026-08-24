@@ -1,6 +1,6 @@
 {
   "name": "dsh-asciinema",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH plugin: record terminal/tool output as asciinema v2 (.cast), replay with an offline embedded player, and export HTML.",
   "type": "module",
   "main": "lib/index.js",
